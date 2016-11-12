@@ -20,9 +20,9 @@ const (
 	SignType	= "RSA"
 	Version		= "1.0"
 	CharSet		= "utf-8"
-	SupportMethod	= map[string]bool{"alipay.trade.precreate":true}
 )
 
+var SupportMethod	= map[string]bool{"alipay.trade.precreate":true}
 //type BaseResponseAlipay struct {
 //	Code 		string `json:"code"`
 //	Msg		string `json:"msg"`
@@ -45,8 +45,6 @@ type AlipayClient struct {
 	NotifyUrl	string // 回调url
 }
 
-
-
 func (this *AlipayClient)initBody (method string, params map[string]string) string{
 	alipayParamters := make(map[string]string)
 	alipayParamters["format"] = valueOfDefault(this.Format, Format)
@@ -62,10 +60,12 @@ func (this *AlipayClient)initBody (method string, params map[string]string) stri
 	paramtersSign := sign(alipayParamters)
 	alipayParamters["sign"] = paramtersSign
 
-	return alipayParamters
+	return aggParam(alipayParamters)
 }
 
-func (this *AlipayClient) Submit(method string, params map[string]string) (*map[string]interface{}, error) {
+
+
+func (this *AlipayClient) Submit(method string, params map[string]string) (map[string]interface{}, error) {
 	if _, ok := SupportMethod[method]; !ok {
 		return nil, errors.New(fmt.Sprintf("not suport method: %s", method))
 	}
@@ -81,15 +81,15 @@ func (this *AlipayClient) Submit(method string, params map[string]string) (*map[
 		return nil, errors.New(fmt.Sprintf("convert resp data to json fail, respdata: %s", respBody))
 	}
 	respData := getRespData(method, respMap)
-	if !RespCheck(respData, respMap["sign"]) {
+	if !RespCheck(respData, respMap["sign"].(string)) {
 		return nil, errors.New(fmt.Sprintf("respData sign check fail"))
 	}
 
-	if respData["msg"] == "Success" {
-		return &respData
+	if respData["msg"].(string) == "Success" {
+		return respData, nil
 	}
 
-	return nil
+	return nil, errors.New(fmt.Sprintf("convert resp data to json fail, respdata: %s", respBody))
 }
 
 func DoPost(url string, body string) (string, error) {
@@ -117,7 +117,7 @@ func getRespData(method string, respBody map[string]interface{}) map[string]inte
 	respName := strings.Replace(method, ".", "_", -1) + "_" + "response"
 	respData, ok := respBody[respName]
 	if ok {
-		return respData
+		return respData.(map[string]interface{})
 	}
 	return nil
 }
@@ -180,7 +180,7 @@ func toJson(data map[string]string) string{
 	if jsonString, err := json.Marshal(data); err != nil {
 		return ""
 	}else {
-		return jsonString
+		return string(jsonString)
 	}
 }
 
@@ -189,4 +189,12 @@ func valueOfDefault(value string, defaultV string) string{
 		return defaultV
 	}
 	return value
+}
+
+func aggParam(params map[string]string) string{
+	var p []string
+	for k, v := range params {
+		p = append(p, fmt.Sprintf("%s=%s", k, v))
+	}
+	return strings.Join(p, "&")
 }
